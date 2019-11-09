@@ -2,7 +2,7 @@
 Go program for finding and supporting sponsorable awesome Go packages in your project's module dependencies (go.mod).
 Let's support the Go developers and make the ecosystem a better place!
 
-![go-support](assets/go-support)
+![go-support](assets/go-support.png)
 
 ## For developers 
 Please help us to update the list of sponsorable packages (your package!) by opening PR on the [`list.go`](https://github.com/joshuabezaleel/go-support/blob/master/list.go) file. 
