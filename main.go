@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
+	"runtime"
 
 	"github.com/xlab/treeprint"
 
@@ -52,13 +55,33 @@ func main() {
 		}
 	}
 
-	tree := buildTree(authorToDependencies)
+	tree, urls := buildTree(authorToDependencies)
 	fmt.Println(tree.String())
+
+	fmt.Print("Do you want to open the donation pages in browser? (Y/N): ")
+	reader := bufio.NewReader(os.Stdin)
+	char, _, err := reader.ReadRune()
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	switch char {
+	case 'Y':
+		for _, url := range urls {
+			openbrowser(url)
+		}
+		fmt.Println("Thank you for supporting these awesome Go packages!! :)")
+		break
+	case 'N':
+		fmt.Println("We are looking forward for your support for these awesome Go packages!! :)")
+		break
+	}
 
 }
 
-func buildTree(authorToDependencies map[string][]string) treeprint.Tree {
-	tree := treeprint.New()
+func buildTree(authorToDependencies map[string][]string) (tree treeprint.Tree, urls []string) {
+	tree = treeprint.New()
 
 	for author, dependencies := range authorToDependencies {
 		authorBranch := tree.AddBranch(author)
@@ -72,10 +95,33 @@ func buildTree(authorToDependencies map[string][]string) treeprint.Tree {
 				for urlType, url := range urlsFromList {
 					donationURL := urlType + ": " + url
 					sponsorBranch.AddNode(donationURL)
+					urls = append(urls, url)
 				}
 			}
 		}
 	}
 
-	return tree
+	return tree, urls
+}
+
+func openbrowser(url string) {
+	var err error
+
+	switch runtime.GOOS {
+	case "linux":
+		err = exec.Command("xdg-open", url).Start()
+		break
+	case "windows":
+		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+		break
+	case "darwin":
+		err = exec.Command("open", url).Start()
+		break
+	default:
+		err = fmt.Errorf("unsupported platform")
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+
 }
