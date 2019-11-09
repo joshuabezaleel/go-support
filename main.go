@@ -6,6 +6,8 @@ import (
 	"log"
 	"os"
 
+	"github.com/xlab/treeprint"
+
 	"github.com/sirkon/goproxy/gomod"
 )
 
@@ -50,11 +52,30 @@ func main() {
 		}
 	}
 
+	tree := buildTree(authorToDependencies)
+	fmt.Println(tree.String())
+
+}
+
+func buildTree(authorToDependencies map[string][]string) treeprint.Tree {
+	tree := treeprint.New()
+
 	for author, dependencies := range authorToDependencies {
-		fmt.Println(author)
+		authorBranch := tree.AddBranch(author)
+		packagesBranch := authorBranch.AddBranch("package(s)")
 		for _, dependency := range dependencies {
-			fmt.Println(dependency)
+			packagesBranch.AddNode(dependency)
+		}
+		sponsorBranch := authorBranch.AddBranch("donation urls")
+		for authorFromList, urlsFromList := range authorToSponsorURLsList {
+			if author == authorFromList {
+				for urlType, url := range urlsFromList {
+					donationURL := urlType + ": " + url
+					sponsorBranch.AddNode(donationURL)
+				}
+			}
 		}
 	}
 
+	return tree
 }
