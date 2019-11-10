@@ -15,6 +15,7 @@ var authorToProjectsList = map[string][]string{
 	},
 	"deadprogram": []string{
 		"github.com/hybridgroup/gocv",
+		"github.com/hybridgroup/gobot",
 	},
 	"markbates": []string{
 		"github.com/gobuffalo/buffalo",
