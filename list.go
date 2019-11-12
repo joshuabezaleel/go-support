@@ -29,6 +29,13 @@ var authorToProjectsList = map[string][]string{
 	"peterbourgon": []string{
 		"github.com/go-kit/kit",
 	},
+	"micro": []string{
+		"github.com/micro/go-plugins",
+		"github.com/micro/micro",
+		"github.com/micro/go-micro",
+		"github.com/micro/macro",
+		"github.com/micro/cli",
+	},
 }
 
 // authorToSponsorURLsList is a map with the string as key and a map[string]string as value.
@@ -60,5 +67,8 @@ var authorToSponsorURLsList = map[string]map[string]string{
 	},
 	"peterbourgon": map[string]string{
 		"github": "https://github.com/sponsors/peterbourgon",
+	},
+	"micro": map[string]string{
+		"issuehunt": "https://issuehunt.io/r/micro/development",
 	},
 }
