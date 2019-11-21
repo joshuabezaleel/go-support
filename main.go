@@ -2,63 +2,143 @@ package main
 
 import (
 	"bufio"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
+	"reflect"
+	"regexp"
 	"runtime"
+	"strings"
+	"time"
 
-	"github.com/xlab/treeprint"
-
+	"github.com/gernest/wow"
+	"github.com/gernest/wow/spin"
 	"github.com/sirkon/goproxy/gomod"
+	"github.com/xlab/treeprint"
+	"gopkg.in/yaml.v2"
 )
 
+const (
+	githubAPIURL                  = "https://api.github.com/repos/"
+	gitHubSponsorTypeURL          = "https://github.com/sponsors/"
+	patreonSponsorTypeURL         = "https://patreon.com/"
+	openCollectiveSponsorTypeURL  = "https://opencollective.com/"
+	kofiSponsorTypeURL            = "https://ko-fi.com/"
+	tideliftSponsorTypeURL        = "https://tidelift.com/"
+	communityBridgeSponsorTypeURL = "https://funding.communitybridge.org/projects/"
+	liberapaySponsorTypeURL       = "https://en.liberapay.com/"
+	issueHuntSponsorTypeURL       = "https://issuehunt.io/r/"
+	otechieSponsorTypeURL         = "https://otechie.com/"
+)
+
+var (
+	moduleGitHubRegex, _      = regexp.Compile("github.com")
+	moduleWithVersionRegex, _ = regexp.Compile("github.com/(.*)/(.*)/")
+)
+
+// Sponsor struct reflects sponsorship type supported by GitHub's FUNDING.yml file
+type Sponsor struct {
+	GitHub          interface{} `yaml:"github"`
+	Patreon         string      `yaml:"patreon"`
+	OpenCollective  string      `yaml:"open_collective"`
+	Kofi            string      `yaml:"ko_fi"`
+	Tidelift        string      `yaml:"tidelift"`
+	CommunityBridge string      `yaml:"community_bridge"`
+	Liberapay       string      `yaml:"liberapay"`
+	IssueHunt       string      `yaml:"issuehunt"`
+	Otechie         string      `yaml:"otechie"`
+	Custom          interface{} `yaml:"custom"`
+}
+
 func main() {
-	dir, err := os.Getwd()
+	var err error
+	authorToProjectsList := make(map[string][]string)
+	authorToSponsorsList := make(map[string]Sponsor)
+	client := &http.Client{}
+
+	parseResult, err := getModule()
 	if err != nil {
 		log.Fatal(err)
 	}
+	go loading(parseResult.Name)
 
-	input, err := ioutil.ReadFile(dir + "/go.mod")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fileName := ""
-	parseResult, err := gomod.Parse(fileName, input)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println(parseResult.Name)
-
-	authorToDependencies := make(map[string][]string)
+	// Sanitize module not hosted in GitHub and module with version
+	var authorRepos []string
 	for dependency := range parseResult.Require {
-		for author, projects := range authorToProjectsList {
-			for _, project := range projects {
-				if dependency == project {
-					found := false
-					for existingAuthor := range authorToDependencies {
-						if existingAuthor == author {
-							found = true
-							// tambah ke []string dengan key existingAuthor
-							authorToDependencies[author] = append(authorToDependencies[author], dependency)
-						}
-					}
-					if !found {
-						var dependencies = []string{dependency}
-						authorToDependencies[author] = dependencies
-					}
-				}
+		if moduleGitHubRegex.MatchString(dependency) {
+			if moduleWithVersionRegex.MatchString(dependency) {
+				authorRepo := moduleWithVersionRegex.FindString(dependency)
+				authorRepo = strings.TrimPrefix(authorRepo, "github.com/")
+				authorRepo = strings.TrimSuffix(authorRepo, "/")
+				authorRepos = append(authorRepos, authorRepo)
+			} else {
+				authorRepo := strings.TrimPrefix(dependency, "github.com/")
+				authorRepos = append(authorRepos, authorRepo)
 			}
 		}
 	}
 
-	tree, urls := buildTree(authorToDependencies)
+	for _, authorRepo := range authorRepos {
+		req, err := http.NewRequest("GET", githubAPIURL+authorRepo+"/contents/.github/FUNDING.yml", nil)
+		req.Header.Set("Authorization", "bearer "+os.Getenv("GITHUB_TOKEN"))
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer resp.Body.Close()
+
+		var respJSON map[string]interface{}
+		err = json.NewDecoder(resp.Body).Decode(&respJSON)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if respJSON["content"] != nil {
+			decodedContent := fmt.Sprintf("%v", respJSON["content"])
+			content, err := base64.StdEncoding.DecodeString(decodedContent)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			sponsor := Sponsor{}
+			err = yaml.Unmarshal(content, &sponsor)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			var sponsorGitHub string
+			switch sponsorGitHubType := sponsor.GitHub.(type) {
+			case []interface{}:
+				sponsorGitHub = sponsorGitHubType[0].(string)
+			case string:
+				sponsorGitHub = sponsor.GitHub.(string)
+			}
+
+			_, authorExisted := authorToProjectsList[sponsorGitHub]
+			if authorExisted {
+				authorToProjectsList[sponsorGitHub] = append(authorToProjectsList[sponsorGitHub], "github.com/"+authorRepo)
+			} else {
+				authorToSponsorsList[sponsorGitHub] = sponsor
+				authorToProjectsList[sponsorGitHub] = []string{"github.com/" + authorRepo}
+			}
+		}
+	}
+
+	tree, gitHubURLs := buildTree(authorToProjectsList, authorToSponsorsList)
+	fmt.Println("")
+	fmt.Println(parseResult.Name)
 	fmt.Println(tree.String())
 
-	fmt.Print("Do you want to open the donation pages in browser? (Y/N): ")
+	fmt.Print("Do you want to open the GitHub sponsor pages in your browser? (Y/N): ")
 	reader := bufio.NewReader(os.Stdin)
 	char, _, err := reader.ReadRune()
 
@@ -68,8 +148,8 @@ func main() {
 
 	switch char {
 	case 'Y':
-		for _, url := range urls {
-			openbrowser(url)
+		for _, gitHubURL := range gitHubURLs {
+			openbrowser(gitHubURL)
 		}
 		fmt.Println("Thank you for supporting these awesome Go packages!! :)")
 		break
@@ -80,28 +160,115 @@ func main() {
 
 }
 
-func buildTree(authorToDependencies map[string][]string) (tree treeprint.Tree, urls []string) {
-	tree = treeprint.New()
+func loading(parseResultName string) {
+	w := wow.New(os.Stdout, spin.Get(spin.Clock), "Retrieving data from GitHub")
+	w.Start()
+	time.Sleep(5 * time.Second)
+	w.Stop()
+	// w.PersistWith(spin.Spinner{Frames: []string{""}}, "")
+}
 
-	for author, dependencies := range authorToDependencies {
+func buildTree(authorToProjectsList map[string][]string, authorToSponsorsList map[string]Sponsor) (tree treeprint.Tree, urls []string) {
+	tree = treeprint.New()
+	var gitHubURLs []string
+
+	for author, dependencies := range authorToProjectsList {
 		authorBranch := tree.AddBranch(author)
+
 		packagesBranch := authorBranch.AddBranch("package(s)")
 		for _, dependency := range dependencies {
 			packagesBranch.AddNode(dependency)
 		}
-		sponsorBranch := authorBranch.AddBranch("donation urls")
-		for authorFromList, urlsFromList := range authorToSponsorURLsList {
+
+		sponsorsBranch := authorBranch.AddBranch("donation urls")
+		for authorFromList, sponsorType := range authorToSponsorsList {
 			if author == authorFromList {
-				for urlType, url := range urlsFromList {
-					donationURL := urlType + ": " + url
-					sponsorBranch.AddNode(donationURL)
-					urls = append(urls, url)
+				sponsorStructReflect := reflect.ValueOf(sponsorType)
+				for i := 0; i < sponsorStructReflect.NumField(); i++ {
+					if sponsorStructReflect.Field(i).Interface() != "" && sponsorStructReflect.Field(i).Interface() != nil {
+
+						sponsorTypeFromReflect := reflect.ValueOf(&sponsorType).Elem().Type().Field(i).Name
+
+						if sponsorTypeFromReflect == "GitHub" {
+							switch sponsorGitHubType := sponsorStructReflect.Field(i).Interface().(type) {
+							case []interface{}:
+								gitHubURLs = append(gitHubURLs, "https://github.com/sponsors/"+sponsorGitHubType[0].(string))
+							case string:
+								gitHubURLs = append(gitHubURLs, "https://github.com/sponsors/"+sponsorGitHubType)
+							}
+						}
+
+						switch sponsorReflectType := sponsorStructReflect.Field(i).Interface().(type) {
+						case []interface{}:
+							if len(sponsorReflectType) == 1 {
+								sponsorsBranch.AddNode(sponsorTypeFromReflect + ": " + appendSponsorTypeURL(sponsorTypeFromReflect, sponsorReflectType[0].(string)))
+							} else {
+								sponsorTypeBranch := sponsorsBranch.AddBranch(sponsorTypeFromReflect)
+								for _, sponsorURL := range sponsorReflectType {
+									sponsorTypeBranch.AddNode(appendSponsorTypeURL(sponsorTypeFromReflect, sponsorURL.(string)))
+								}
+							}
+						case string:
+							sponsorsBranch.AddNode(sponsorTypeFromReflect + ": " + appendSponsorTypeURL(sponsorTypeFromReflect, sponsorStructReflect.Field(i).Interface().(string)))
+						}
+					}
 				}
 			}
 		}
 	}
 
-	return tree, urls
+	return tree, gitHubURLs
+}
+
+func getModule() (*gomod.Module, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		log.Fatal(err)
+		return nil, err
+	}
+
+	input, err := ioutil.ReadFile(dir + "/go.mod")
+	if err != nil {
+		log.Fatal(err)
+		return nil, err
+	}
+
+	fileName := ""
+	parseResult, err := gomod.Parse(fileName, input)
+	if err != nil {
+		log.Fatal(err)
+		return nil, err
+	}
+
+	return parseResult, nil
+}
+
+func appendSponsorTypeURL(sponsorType, sponsor string) string {
+	var appendedSponsor string
+	switch sponsorType {
+	case "GitHub":
+		appendedSponsor = gitHubSponsorTypeURL + sponsor
+	case "Patreon":
+		appendedSponsor = patreonSponsorTypeURL + sponsor
+	case "OpenCollective":
+		appendedSponsor = openCollectiveSponsorTypeURL + sponsor
+	case "Kofi":
+		appendedSponsor = kofiSponsorTypeURL + sponsor
+	case "Tidelift":
+		appendedSponsor = tideliftSponsorTypeURL + sponsor
+	case "ComunityBridge":
+		appendedSponsor = communityBridgeSponsorTypeURL + sponsor
+	case "Liberapay":
+		appendedSponsor = liberapaySponsorTypeURL + sponsor
+	case "IssueHunt":
+		appendedSponsor = issueHuntSponsorTypeURL + sponsor
+	case "Otechie":
+		appendedSponsor = otechieSponsorTypeURL + sponsor
+	case "Custom":
+		appendedSponsor = sponsor
+	}
+
+	return appendedSponsor
 }
 
 func openbrowser(url string) {
