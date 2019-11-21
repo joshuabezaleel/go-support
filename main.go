@@ -14,7 +14,6 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
-	"time"
 
 	"github.com/gernest/wow"
 	"github.com/gernest/wow/spin"
@@ -65,7 +64,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	go loading(parseResult.Name)
+	if len(parseResult.Require) == 0 {
+		fmt.Printf("We didn't find any external Go packages on your project \"%v\" 😶 \n", parseResult.Name)
+		os.Exit(1)
+	}
+	// go loading(parseResult.Name)
+	w := wow.New(os.Stdout, spin.Get(spin.Clock), "Retrieving data from GitHub")
+	w.Start()
 
 	// Sanitize module not hosted in GitHub and module with version
 	var authorRepos []string
@@ -132,6 +137,14 @@ func main() {
 			}
 		}
 	}
+	w.Stop()
+
+	// fmt.Println(authorToProjectsList)
+	if len(authorToProjectsList) == 0 {
+		fmt.Println("")
+		fmt.Printf("We couldn't find any sponsorable Go packages on your project \"%v\" 😞 \n ", parseResult.Name)
+		os.Exit(1)
+	}
 
 	tree, gitHubURLs := buildTree(authorToProjectsList, authorToSponsorsList)
 	fmt.Println("")
@@ -151,21 +164,13 @@ func main() {
 		for _, gitHubURL := range gitHubURLs {
 			openbrowser(gitHubURL)
 		}
-		fmt.Println("Thank you for supporting these awesome Go packages!! :)")
+		fmt.Println("Thank you for making the community much better by supporting these awesome Go packages!! ❤️ ❤️ ❤️")
 		break
 	case 'N':
-		fmt.Println("We are looking forward for your support for these awesome Go packages!! :)")
+		fmt.Println("We are looking forward to your support for these awesome Go packages!! 😊")
 		break
 	}
 
-}
-
-func loading(parseResultName string) {
-	w := wow.New(os.Stdout, spin.Get(spin.Clock), "Retrieving data from GitHub")
-	w.Start()
-	time.Sleep(5 * time.Second)
-	w.Stop()
-	// w.PersistWith(spin.Spinner{Frames: []string{""}}, "")
 }
 
 func buildTree(authorToProjectsList map[string][]string, authorToSponsorsList map[string]Sponsor) (tree treeprint.Tree, urls []string) {
