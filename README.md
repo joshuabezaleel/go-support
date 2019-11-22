@@ -11,11 +11,12 @@ Let's support all the Go developers and make the Go ecosystem a better place!
 4. Run `go-support` in the root of your project modules.
 5. Open the URLs in the browser and make donations!
 
-## Caveats
+## How it works
 - All of the modules and dependencies are retrieved from your project's `go.mod` file. 
 - Modules and dependencies that will be processed are the one hosted at GitHub (github.com). 
 - The modules are then grouped by author according to the first (1st) GitHub Sponsors-enabled username at the repository's `.github/FUNDING.yml`.
 - If no GitHub Sponsors page found at a module, the author name will be parsed from the repository's name.
+- All of the funding platforms will be retrieved from each of the repository's `.github/FUNDING.yml`
 - URLs that will be opened in the browser are the GitHub authors page stated in the previous point.
 
 ## Prior Art
