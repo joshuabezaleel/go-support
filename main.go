@@ -9,14 +9,13 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"reflect"
 	"regexp"
-	"runtime"
 	"strings"
 
 	"github.com/gernest/wow"
 	"github.com/gernest/wow/spin"
+	"github.com/pkg/browser"
 	"github.com/sirkon/goproxy/gomod"
 	"github.com/xlab/treeprint"
 	"gopkg.in/yaml.v2"
@@ -38,6 +37,7 @@ const (
 var (
 	moduleGitHubRegex, _      = regexp.Compile("github.com")
 	moduleWithVersionRegex, _ = regexp.Compile("github.com/(.*)/(.*)/")
+	authorFromAuthorRepo, _   = regexp.Compile("(.*)/")
 )
 
 // Sponsor struct reflects sponsorship type supported by GitHub's FUNDING.yml file
@@ -120,12 +120,17 @@ func main() {
 				log.Fatal(err)
 			}
 
+			// Get author
 			var sponsorGitHub string
 			switch sponsorGitHubType := sponsor.GitHub.(type) {
 			case []interface{}:
 				sponsorGitHub = sponsorGitHubType[0].(string)
 			case string:
 				sponsorGitHub = sponsor.GitHub.(string)
+			case nil:
+				author := authorFromAuthorRepo.FindString(authorRepo)
+				author = strings.TrimSuffix(author, "/")
+				sponsorGitHub = author
 			}
 
 			_, authorExisted := authorToProjectsList[sponsorGitHub]
@@ -139,7 +144,6 @@ func main() {
 	}
 	w.Stop()
 
-	// fmt.Println(authorToProjectsList)
 	if len(authorToProjectsList) == 0 {
 		fmt.Println("")
 		fmt.Printf("We couldn't find any sponsorable Go packages on your project \"%v\" 😞 \n ", parseResult.Name)
@@ -150,6 +154,11 @@ func main() {
 	fmt.Println("")
 	fmt.Println(parseResult.Name)
 	fmt.Println(tree.String())
+
+	if len(gitHubURLs) == 0 {
+		fmt.Println("We couldn't find any GitHub sponsor pages in the lists but there are still numerous sponsor method available! 🥳")
+		os.Exit(1)
+	}
 
 	fmt.Print("Do you want to open the GitHub sponsor pages in your browser? (Y/N): ")
 	reader := bufio.NewReader(os.Stdin)
@@ -162,7 +171,11 @@ func main() {
 	switch char {
 	case 'Y':
 		for _, gitHubURL := range gitHubURLs {
-			openbrowser(gitHubURL)
+			// openbrowser(gitHubURL)
+			err = browser.OpenURL(gitHubURL)
+			if err != nil {
+				log.Fatal(err)
+			}
 		}
 		fmt.Println("Thank you for making the community much better by supporting these awesome Go packages!! ❤️ ❤️ ❤️")
 		break
@@ -276,24 +289,24 @@ func appendSponsorTypeURL(sponsorType, sponsor string) string {
 	return appendedSponsor
 }
 
-func openbrowser(url string) {
-	var err error
+// func openbrowser(url string) {
+// 	var err error
 
-	switch runtime.GOOS {
-	case "linux":
-		err = exec.Command("xdg-open", url).Start()
-		break
-	case "windows":
-		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
-		break
-	case "darwin":
-		err = exec.Command("open", url).Start()
-		break
-	default:
-		err = fmt.Errorf("unsupported platform")
-	}
-	if err != nil {
-		log.Fatal(err)
-	}
+// 	switch runtime.GOOS {
+// 	case "linux":
+// 		err = exec.Command("xdg-open", url).Start()
+// 		break
+// 	case "windows":
+// 		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+// 		break
+// 	case "darwin":
+// 		err = exec.Command("open", url).Start()
+// 		break
+// 	default:
+// 		err = fmt.Errorf("unsupported platform")
+// 	}
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
 
-}
+// }
