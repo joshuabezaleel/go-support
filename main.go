@@ -169,7 +169,7 @@ func main() {
 	}
 
 	switch char {
-	case 'Y':
+	case 'Y', 'y':
 		for _, gitHubURL := range gitHubURLs {
 			// openbrowser(gitHubURL)
 			err = browser.OpenURL(gitHubURL)
