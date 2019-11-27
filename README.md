@@ -21,3 +21,6 @@ Let's support all the Go developers and make the Go ecosystem a better place!
 
 ## Prior Art
 This project is highly inspired by the kind efforts of [feross'](https://github.com/feross) [thanks](https://github.com/feross/thanks), GitHub sponsor, and [npm fund](https://github.com/npm/cli/pull/273). Thank you very much for taking the first steps. 
+
+## LICENSE
+Project is licensed under the terms of MIT license. 
