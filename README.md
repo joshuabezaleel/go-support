@@ -1,3 +1,5 @@
+change readme for gh testing
+
 # go-support
 Go program for finding and supporting sponsorable awesome Go packages in your project's module dependencies (go.mod).
 Let's support all the Go developers and make the Go ecosystem a better place!
